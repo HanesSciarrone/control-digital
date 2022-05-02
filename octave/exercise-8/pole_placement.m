@@ -29,13 +29,15 @@ C_z = C
 D_z = D
 
 %%
-% 2) Obtener la respuesta al escalón en tiempo continuo y discreto.
+% 2) Obtener la respuesta al escalón en tiempo continuo y discreto y el diagrama de polos y ceros
 %%
 
 figure;
 step(Hs, Hz)
 
-pole(Hz)
+poles_LA =pole(Hz)
+
+zplane(numz, denz)
 
 % Calculo del K necesario para mejorar la respuesta del sistema sin el seguimiento de la referencia.
 
