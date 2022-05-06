@@ -25,11 +25,13 @@ typedef struct {
 } polePlacementConfig_t;
 
 /*=====[Definitions of external public global variables]=====================*/
-#define N_SAMPLES    40000
+#define N_SAMPLES    5000
 
 /*=====[Definitions of public global variables]==============================*/
 
 /*=====[Definitions of private global variables]=============================*/
+int output[N_SAMPLES] = {0};
+char ready = 0;
 
 /*=====[Prototypes (declarations) of private functions]======================*/
 static float poleAndPlacement(const polePlacementConfig_t* pid, const arm_matrix_instance_f32* state, const float* reference);
@@ -44,14 +46,15 @@ void pidControlTask( void* taskParmPtr )
     float reference = 0.0f;     // Reference signal that supply the circuit.
     float data[2] = { 0 };      // Store state variable values
     float values[2] = { 0 };    // Store K values of the PID
-    int index = 0, x1 = 0, x2 = 0;
+    uint16_t index = 0, x1 = 0, x2 = 0, outputPid = 0;
     char bufferData[10] = { 0 };
+
     arm_matrix_instance_f32 states;
     polePlacementConfig_t pole_placement_config;
 
-    values[0] = 1.02985;
-    values[1] = 0.77090;
-    pole_placement_config.Ko = 2.8008;
+    values[0] = 0.72211f;
+    values[1] = 0.85232f;
+    pole_placement_config.Ko = 2.5744f;
 
     arm_mat_init_f32(&states, 2, 1, data);
     arm_mat_init_f32(&pole_placement_config.K, 1, 2, values);
@@ -66,7 +69,7 @@ void pidControlTask( void* taskParmPtr )
 
     // ----- Task repeat for ever -------------------------
     while(TRUE) {
-        reference = (index >= 20000) ? 3.3f : 0.0f;
+        reference = (index >= 2500) ? 3.3f : 0.0f;
 
         x2 = adcRead(CH1);
         x1 = adcRead(CH2);
@@ -75,11 +78,24 @@ void pidControlTask( void* taskParmPtr )
         u = poleAndPlacement(&pole_placement_config, &states, &reference);
         u *= SCALE_DAC;
 
-        dacWrite(DAC, u);
+        outputPid = (u  < 0) ? 0 : (uint16_t)u;
 
-        itoa(x2, bufferData, 10);
-        uartWriteString(UART_USB, bufferData);
-        uartWriteByte(UART_USB, '\n');
+        dacWrite(DAC, outputPid);
+
+
+        if (index < 5000) {
+            output[index] = x2;
+        }
+        else if (index == 5000) {
+            for (index = 0; index < N_SAMPLES; index++) {
+            itoa(output[index], bufferData, 10);
+                uartWriteString(UART_USB, bufferData);
+                uartWriteByte(UART_USB, '\n');
+            }
+        }
+
+        index++;
+
         vTaskDelayUntil( &xLastWakeTime, xPeriodicity );
     }
 }
@@ -89,16 +105,19 @@ void pidControlTask( void* taskParmPtr )
 /*=====[Implementations of private functions]================================*/
 static float poleAndPlacement(const polePlacementConfig_t* pid, const arm_matrix_instance_f32* state, const float* reference)
 {
-    arm_matrix_instance_f32 output;
+    //arm_matrix_instance_f32 output;
     float retVal = 0;
 
-    arm_mat_init_f32(&output, 1, 1, &retVal);
+    //arm_mat_init_f32(&output, 1, 1, &retVal);
 
-    if (ARM_MATH_SUCCESS != arm_mat_mult_f32(&pid->K, state, &output)) {
-        return 0;
-    }
+    retVal = (float)*reference * pid->Ko - ( pid->K.pData[0] * state->pData[0] + pid->K.pData[1] * state->pData[1]);
 
-    retVal += (float)*reference * pid->Ko;
+//    if (ARM_MATH_SUCCESS != arm_mat_mult_f32(&pid->K, state, &output)) {
+//        return 0;
+//    }
+//
+//    retVal -= (float)*reference * pid->Ko;
+//    retVal *= -1;
     return retVal;
 }
 
